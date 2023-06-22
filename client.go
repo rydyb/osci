@@ -1,54 +1,53 @@
-package main
+package osci
 
 import (
-	"bufio"
-	"errors"
 	"fmt"
-	"net"
 	"strings"
-	"time"
+
+	"github.com/rydyb/telnet"
 )
 
-var ErrNotOpen = errors.New("connection not open")
-
 type Client struct {
-	Timeout time.Duration
-	Address string
-	conn    net.Conn
-	reader  *bufio.Reader
+	telnet.Client
 }
 
-func (c *Client) Open() (err error) {
-	c.conn, err = net.DialTimeout("tcp", c.Address, c.Timeout)
+func (c *Client) Identity() (string, error) {
+	out, err := c.Client.Exec("*idn?")
 	if err != nil {
-		return
+		return "", fmt.Errorf("failed to query identity: %w", err)
 	}
-	c.reader = bufio.NewReader(c.conn)
-
-	return
+	return out, nil
 }
 
-func (c *Client) Close() error {
-	if c.conn == nil {
-		return ErrNotOpen
+func (c *Client) MeasurementList() ([]string, error) {
+	out, err := c.Client.Exec("MEASUrement:LIST?")
+	if err != nil {
+		return nil, fmt.Errorf("failed to query measurement list: %w", err)
 	}
-	return c.conn.Close()
+	return strings.Split(out, ","), nil
 }
 
-func (c *Client) Exec(cmd string) (string, error) {
-	if c.conn == nil {
-		return "", ErrNotOpen
-	}
-
-	_, err := fmt.Fprintf(c.conn, cmd+"\r\n")
+func (c *Client) measurementValue(name string) (string, error) {
+	out, err := c.Client.Exec(fmt.Sprintf("MEASUrement:%s:VALue?", name))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to query measurement value: %w", err)
 	}
+	return out, nil
+}
 
-	out, err := c.reader.ReadString('\n')
+func (c *Client) Measurements() (map[string]string, error) {
+	names, err := c.MeasurementList()
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	return strings.TrimSpace(out), nil
+	measurements := make(map[string]string, len(names))
+	for _, name := range names {
+		value, err := c.measurementValue(name)
+		if err != nil {
+			return nil, err
+		}
+		measurements[name] = value
+	}
+	return measurements, nil
 }
