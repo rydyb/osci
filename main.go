@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/alecthomas/kong"
@@ -33,6 +34,28 @@ func main() {
 	}
 	defer client.Close()
 
-	fmt.Println(client.Exec("*idn?"))
-	fmt.Println(client.Exec("MEASUrement:LIST?"))
+	//fmt.Println(client.Exec("*idn?"))
+
+	out, err := client.Exec("MEASUrement:LIST?")
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to acquire measurement names")
+	}
+	names := strings.Split(out, ",")
+	log.Debug().Strs("measurementNames", names).Msg("acquired measurement names")
+
+	values := make([]string, len(names))
+	for i, name := range names {
+		value, err := client.Exec(fmt.Sprintf("MEASUrement:%s:VALue?", name))
+		if err != nil {
+			log.Fatal().Err(err).Msg("failed to acquire list of measurements")
+		}
+		values[i] = value
+		log.Debug().Str("measurementName", name).Str("measurementValue", value).Msg("acquired measurement")
+	}
+	log.Debug().Strs("measurementValues", values).Msg("received measurement values")
+
+	if !log.Debug().Enabled() {
+		fmt.Println(strings.Join(names, ", "))
+		fmt.Println(strings.Join(values, ", "))
+	}
 }

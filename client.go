@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 )
 
@@ -44,5 +45,10 @@ func (c *Client) Exec(cmd string) (string, error) {
 		return "", err
 	}
 
-	return c.reader.ReadString('\n')
+	out, err := c.reader.ReadString('\n')
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(out), nil
 }
